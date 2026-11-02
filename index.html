@@ -265,7 +265,7 @@
 
 <script>
 // ============ CONFIG GEMINI ============
-const GEMINI_MODEL = 'gemini-2.0-flash-exp';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = (key) => `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
 const getApiKey = () => localStorage.getItem('gemini_api_key') || '';
 const setApiKey = (key) => localStorage.setItem('gemini_api_key', key.trim());
