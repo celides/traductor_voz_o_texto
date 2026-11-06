@@ -1,819 +1,135 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0f172a">
-<title>VoxFlow — Traductor en Tiempo Real</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14161c">
+<title>VoxFlow</title>
 <style>
-  body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-  @keyframes pulse-ring {
-    0% { transform: scale(0.95); opacity: 0.8; }
-    50% { transform: scale(1.18); opacity: 0.35; }
-    100% { transform: scale(0.95); opacity: 0.8; }
-  }
-  .animate-pulse-ring { animation: pulse-ring 1.6s infinite ease-in-out; }
-  .custom-scroll::-webkit-scrollbar { width: 6px; }
-  .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-  .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-  #translationCard.expanded {
-    position: fixed; inset: 0; z-index: 50; border-radius: 0;
-    margin: 0; max-height: 100vh; padding: 1.5rem;
-  }
-  .fade-in { animation: fadeIn 0.3s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-  .tab-active { background: #4f46e5 !important; color: #fff !important; }
+:root{--bg:#14161c;--panel:#1d2028;--line:#2e323d;--tx:#ece8df;--mu:#8f94a3;--ok:#6cc4ae;--rec:#e5645a}
+*{box-sizing:border-box}
+body{margin:0;height:100dvh;display:flex;flex-direction:column;background:var(--bg);color:var(--tx);
+font:16px/1.4 system-ui,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+select,label.sw{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+label.sw{display:flex;align-items:center;gap:6px}
+#log{flex:1;overflow-y:auto;padding:14px 14px 4px}
+.it{margin:0 0 18px;max-width:34em}
+.zh{font-size:clamp(24px,7vw,34px);line-height:1.45;letter-spacing:.02em}
+.es{font-size:13px;color:var(--mu);margin-top:4px}
+#live{min-height:22px;padding:0 14px;font-size:14px;color:var(--mu);font-style:italic}
+#msg{padding:0 14px;font-size:14px;color:var(--rec)}
+.foot{display:flex;justify-content:center;padding:10px 0 14px}
+#mic{min-width:200px;height:68px;border-radius:34px;border:0;font-size:18px;font-weight:600;color:#10231f;background:var(--ok);cursor:pointer}
+#mic.on{background:var(--rec);color:#2a0f0c}
+#mic:focus-visible,select:focus-visible{outline:3px solid #fff;outline-offset:2px}
 </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col p-3 md:p-6 pb-32">
-
-<!-- Modal API Key -->
-<div id="apiModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden">
-  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-    <div class="flex items-center gap-3 mb-4">
-      <div class="bg-amber-500/20 text-amber-400 p-2 rounded-lg"><i class="fa-solid fa-key"></i></div>
-      <h2 class="text-lg font-bold text-white">Configurar API Key</h2>
-    </div>
-    <p class="text-sm text-slate-400 mb-4">
-      Introduce tu API key de Google Gemini. Se guarda solo en tu navegador.
-      <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-400 hover:underline">Obtener gratis →</a>
-    </p>
-    <input id="apiKeyInput" type="password" placeholder="AIza..." class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-3">
-    <div class="flex gap-2">
-      <button id="saveApiKeyBtn" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-xl text-sm transition">Guardar</button>
-      <button id="closeApiModal" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-sm transition">Cerrar</button>
-    </div>
-  </div>
+<body>
+<div class="bar">
+  <select id="ui" aria-label="UI"><option value="es">Español</option><option value="en">English</option><option value="zh">中文</option></select>
+  <select id="var" aria-label="Chinese"><option value="zh-Hans">简体</option><option value="zh-Hant">繁體</option></select>
+  <select id="eng" aria-label="Engine"><option value="azure">Azure</option><option value="gemini">Gemini</option></select>
+  <label class="sw"><input type="checkbox" id="aud"><span data-t="audio"></span></label>
 </div>
-
-<!-- Header -->
-<header class="max-w-5xl mx-auto w-full flex items-center justify-between pb-4 border-b border-slate-800">
-  <div class="flex items-center gap-3">
-    <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow-lg shadow-indigo-500/30">
-      <i class="fa-solid fa-language text-xl"></i>
-    </div>
-    <div>
-      <h1 class="text-lg md:text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VoxFlow</h1>
-      <p class="text-[10px] text-slate-400">Traducción por voz y texto · tiempo real</p>
-    </div>
-  </div>
-  <div class="flex items-center gap-2">
-    <button id="openApiBtn" class="text-slate-400 hover:text-amber-400 p-2 rounded-lg bg-slate-800 border border-slate-700 transition" title="Configurar API Key">
-      <i class="fa-solid fa-key text-xs"></i>
-    </button>
-    <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-medium text-slate-300">
-      <span id="statusDot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
-      <span id="statusText">Listo</span>
-    </div>
-  </div>
-</header>
-
-<main class="max-w-5xl mx-auto w-full flex-1 py-4 space-y-4">
-
-  <!-- Configuración idiomas -->
-  <div class="bg-slate-800/80 backdrop-blur border border-slate-700/60 rounded-2xl p-3 md:p-5 shadow-xl space-y-3">
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-      <div class="md:col-span-5 space-y-1">
-        <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          <i class="fa-solid fa-microphone text-indigo-400 mr-1"></i> Idioma origen:
-        </label>
-        <select id="sourceLang" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="es-MX" selected>Español (Latam)</option>
-          <option value="es-ES">Español (España)</option>
-          <option value="en-US">Inglés (EE.UU.)</option>
-          <option value="fr-FR">Francés</option>
-          <option value="de-DE">Alemán</option>
-          <option value="it-IT">Italiano</option>
-          <option value="pt-BR">Portugués (Brasil)</option>
-          <option value="zh-CN">Chino Mandarín</option>
-          <option value="ja-JP">Japonés</option>
-        </select>
-      </div>
-      <div class="md:col-span-2 flex justify-center">
-        <button id="swapLangsBtn" class="p-2.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-full transition active:scale-95" title="Intercambiar">
-          <i class="fa-solid fa-arrow-right-arrow-left"></i>
-        </button>
-      </div>
-      <div class="md:col-span-5 space-y-1">
-        <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          <i class="fa-solid fa-volume-high text-emerald-400 mr-1"></i> Idioma destino:
-        </label>
-        <select id="targetLang" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <option value="en-US" selected>Inglés (EE.UU.)</option>
-          <option value="es-MX">Español (Latam)</option>
-          <option value="es-ES">Español (España)</option>
-          <option value="fr-FR">Francés</option>
-          <option value="de-DE">Alemán</option>
-          <option value="it-IT">Italiano</option>
-          <option value="pt-BR">Portugués</option>
-          <option value="zh-CN">Chino Mandarín</option>
-          <option value="ja-JP">Japonés</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-700/50">
-      <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700">
-        <button data-mode="both" class="output-mode-btn px-3 py-1.5 rounded-lg text-[11px] font-medium transition bg-indigo-600 text-white">
-          <i class="fa-solid fa-glasses mr-1"></i><i class="fa-solid fa-volume-high"></i> Ambos
-        </button>
-        <button data-mode="text" class="output-mode-btn px-3 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:text-slate-200 transition">
-          <i class="fa-solid fa-align-left mr-1"></i> Texto
-        </button>
-        <button data-mode="audio" class="output-mode-btn px-3 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:text-slate-200 transition">
-          <i class="fa-solid fa-volume-high mr-1"></i> Audio
-        </button>
-      </div>
-      <label class="flex items-center gap-2 cursor-pointer">
-        <i class="fa-solid fa-bolt text-amber-400 text-xs"></i>
-        <span class="text-[11px] text-slate-300 font-medium">Modo Salón</span>
-        <div class="relative">
-          <input type="checkbox" id="fastModeToggle" class="sr-only peer" checked>
-          <div class="w-9 h-5 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-        </div>
-      </label>
-    </div>
-  </div>
-
-  <!-- TABS: Modo Voz / Modo Texto -->
-  <div class="flex gap-1 bg-slate-800/60 p-1 rounded-xl border border-slate-700/60">
-    <button id="tabVoice" class="tab-btn flex-1 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition tab-active">
-      <i class="fa-solid fa-microphone mr-1.5"></i> Modo Voz
-    </button>
-    <button id="tabText" class="tab-btn flex-1 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition">
-      <i class="fa-solid fa-keyboard mr-1.5"></i> Modo Texto
-    </button>
-  </div>
-
-  <!-- ============ PANEL VOZ ============ -->
-  <div id="voicePanel" class="grid grid-cols-1 md:grid-cols-12 gap-3">
-    <!-- Original -->
-    <div class="md:col-span-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl p-3 shadow-lg flex flex-col min-h-[180px] max-h-[240px]">
-      <div class="flex items-center justify-between border-b border-slate-700/50 pb-2 mb-2">
-        <span class="text-[10px] font-semibold uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span> Original (voz)
-        </span>
-        <button id="clearBtn" class="text-slate-500 hover:text-rose-400 text-xs transition p-1" title="Limpiar todo">
-          <i class="fa-solid fa-trash-can"></i>
-        </button>
-      </div>
-      <div class="overflow-y-auto custom-scroll flex-1 pr-1">
-        <p id="inputText" class="text-slate-300 text-sm leading-relaxed italic">Esperando audio...</p>
-      </div>
-      <div class="text-right pt-1 mt-1 border-t border-slate-700/30">
-        <span id="speechState" class="text-[9px] text-slate-500">Inactivo</span>
-      </div>
-    </div>
-
-    <!-- Traducción -->
-    <div id="translationCard" class="md:col-span-8 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-2xl flex flex-col min-h-[380px]">
-      <div class="flex items-center justify-between border-b border-slate-700/60 pb-2 mb-2">
-        <span class="text-[11px] font-bold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Traducción
-        </span>
-        <div class="flex items-center gap-1.5">
-          <button id="expandBtn" class="text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 p-1.5 rounded-lg text-xs transition" title="Pantalla completa">
-            <i id="expandIcon" class="fa-solid fa-expand"></i>
-          </button>
-          <button id="speakResultBtn" disabled class="text-slate-400 hover:text-emerald-400 disabled:opacity-40 text-sm transition p-1" title="Escuchar">
-            <i class="fa-solid fa-circle-play text-lg"></i>
-          </button>
-          <button id="copyBtn" class="text-slate-400 hover:text-slate-200 text-xs transition p-1" title="Copiar">
-            <i class="fa-solid fa-copy"></i>
-          </button>
-          <button id="downloadBtn" class="text-slate-400 hover:text-slate-200 text-xs transition p-1" title="Descargar .txt">
-            <i class="fa-solid fa-download"></i>
-          </button>
-        </div>
-      </div>
-      <div class="relative flex-1 overflow-hidden">
-        <div id="translationHistory" class="h-full overflow-y-auto custom-scroll pr-2 space-y-2 text-slate-100 text-base md:text-lg font-medium leading-relaxed">
-          <p class="text-slate-500 italic text-sm">La traducción se acumulará aquí para que puedas releer...</p>
-        </div>
-        <div id="translatingSpinner" class="hidden absolute top-1 right-1 bg-slate-900/90 border border-indigo-500/40 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-indigo-400 text-[10px] font-medium shadow-lg z-20">
-          <i class="fa-solid fa-circle-notch animate-spin text-xs"></i> Traduciendo
-        </div>
-      </div>
-      <div class="flex justify-between items-center pt-2 mt-2 border-t border-slate-700/50 text-[10px] text-slate-400">
-        <span id="historyCount">0 fragmentos</span>
-        <span id="translationState">En espera</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============ PANEL TEXTO ============ -->
-  <div id="textPanel" class="hidden bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-xl space-y-3">
-    <div>
-      <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-        <i class="fa-solid fa-pen text-indigo-400 mr-1"></i> Escribe el texto a traducir:
-      </label>
-      <textarea id="textInputArea" rows="4" placeholder="Escribe aquí y pulsa 'Traducir'..."
-        class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none custom-scroll"></textarea>
-      <div class="flex justify-between items-center mt-2">
-        <span id="charCount" class="text-[10px] text-slate-500">0 caracteres</span>
-        <div class="flex gap-2">
-          <button id="clearTextBtn" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-700/50 hover:bg-slate-700 transition">
-            <i class="fa-solid fa-eraser mr-1"></i> Limpiar
-          </button>
-          <button id="translateTextBtn" class="px-4 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-lg shadow-indigo-500/20">
-            <i class="fa-solid fa-language mr-1"></i> Traducir
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Resultado texto -->
-    <div class="bg-slate-900/60 border border-slate-700/60 rounded-xl p-4 min-h-[120px]">
-      <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-700/40">
-        <span class="text-[10px] font-semibold uppercase text-emerald-400 tracking-wider">
-          <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Traducción
-        </span>
-        <div class="flex gap-1.5">
-          <button id="speakTextResultBtn" disabled class="text-slate-400 hover:text-emerald-400 disabled:opacity-40 p-1 transition" title="Escuchar">
-            <i class="fa-solid fa-circle-play"></i>
-          </button>
-          <button id="copyTextResultBtn" disabled class="text-slate-400 hover:text-slate-200 disabled:opacity-40 p-1 transition" title="Copiar">
-            <i class="fa-solid fa-copy"></i>
-          </button>
-        </div>
-      </div>
-      <p id="textResult" class="text-slate-100 text-base leading-relaxed">La traducción aparecerá aquí...</p>
-    </div>
-  </div>
-
-</main>
-
-<!-- Botón micrófono flotante (solo modo voz) -->
-<div id="micWrapper" class="fixed bottom-4 left-0 right-0 flex flex-col items-center pointer-events-none z-40">
-  <div class="relative pointer-events-auto">
-    <div id="micRing" class="hidden absolute inset-0 rounded-full bg-rose-500/40 animate-pulse-ring"></div>
-    <button id="micBtn" class="relative z-10 w-20 h-20 md:w-24 md:h-24 rounded-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white flex flex-col items-center justify-center shadow-2xl transition border-4 border-slate-900 focus:outline-none">
-      <i id="micIcon" class="fa-solid fa-microphone text-2xl md:text-3xl mb-0.5"></i>
-      <span id="micLabel" class="text-[9px] font-bold tracking-wider uppercase">Hablar</span>
-    </button>
-  </div>
-</div>
-
-<!-- Toast -->
-<div id="toast" class="fixed bottom-32 right-4 bg-slate-800 border border-slate-700 text-slate-200 px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 transform translate-y-20 opacity-0 flex items-center gap-3 z-50">
-  <i id="toastIcon" class="fa-solid fa-circle-info text-indigo-400"></i>
-  <span id="toastMessage" class="text-sm font-medium">Notificación</span>
-</div>
+<div id="log" aria-live="polite"></div>
+<div id="live"></div>
+<div id="msg"></div>
+<div class="foot"><button id="mic"></button></div>
 
 <script>
-// ============ CONFIG GEMINI ============
-const GEMINI_MODEL = 'gemini-3.8-flash';
-const GEMINI_URL = (key) => `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-const getApiKey = () => localStorage.getItem('gemini_api_key') || '';
-const setApiKey = (key) => localStorage.setItem('gemini_api_key', key.trim());
-
-// ============ ESTADO ============
-const state = {
-  isListening: false,
-  shouldRestart: false,
-  recognition: null,
-  outputMode: 'both',
-  fullHistory: [],
-  lastProcessedText: '',
-  isExpanded: false,
-  silenceTimer: null,
-  isTranslating: false,
-  pendingText: null,
-  wakeLock: null,
-  currentTab: 'voice',
-  lastTextResult: ''
+const T={
+ es:{start:'Escuchar',stop:'Detener',audio:'Audio',hear:'Escuchando…',unsup:'Este navegador no reconoce voz. Abre la página en Chrome.',deny:'Permiso de micrófono denegado. Actívalo en los ajustes del navegador.',err:'No se pudo traducir',tr:'Traduciendo…'},
+ en:{start:'Listen',stop:'Stop',audio:'Audio',hear:'Listening…',unsup:'This browser has no speech recognition. Open the page in Chrome.',deny:'Microphone permission denied. Enable it in browser settings.',err:'Translation failed',tr:'Translating…'},
+ zh:{start:'开始聆听',stop:'停止',audio:'语音',hear:'正在聆听…',unsup:'此浏览器不支持语音识别，请用 Chrome 打开。',deny:'麦克风权限被拒绝，请在浏览器设置中开启。',err:'翻译失败',tr:'翻译中…'}
 };
+const $=id=>document.getElementById(id);
+const store={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+const t=k=>T[$('ui').value][k];
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec,on=false,lock=null,pending=0;
 
-// ============ DOM ============
-const $ = (id) => document.getElementById(id);
-const micBtn = $('micBtn'), micIcon = $('micIcon'), micLabel = $('micLabel'), micRing = $('micRing');
-const sourceLang = $('sourceLang'), targetLang = $('targetLang'), swapLangsBtn = $('swapLangsBtn');
-const fastModeToggle = $('fastModeToggle');
-const inputText = $('inputText');
-const translationHistory = $('translationHistory');
-const translationCard = $('translationCard');
-const expandBtn = $('expandBtn'), expandIcon = $('expandIcon');
-const historyCount = $('historyCount');
-const speechState = $('speechState'), translationState = $('translationState');
-const statusDot = $('statusDot'), statusText = $('statusText');
-const translatingSpinner = $('translatingSpinner');
-const speakResultBtn = $('speakResultBtn'), copyBtn = $('copyBtn'), downloadBtn = $('downloadBtn'), clearBtn = $('clearBtn');
-const toast = $('toast'), toastMessage = $('toastMessage'), toastIcon = $('toastIcon');
-const apiModal = $('apiModal'), apiKeyInput = $('apiKeyInput'), saveApiKeyBtn = $('saveApiKeyBtn');
-const openApiBtn = $('openApiBtn'), closeApiModal = $('closeApiModal');
-const tabVoice = $('tabVoice'), tabText = $('tabText');
-const voicePanel = $('voicePanel'), textPanel = $('textPanel');
-const textInputArea = $('textInputArea'), charCount = $('charCount');
-const translateTextBtn = $('translateTextBtn'), clearTextBtn = $('clearTextBtn');
-const textResult = $('textResult'), speakTextResultBtn = $('speakTextResultBtn'), copyTextResultBtn = $('copyTextResultBtn');
-const micWrapper = $('micWrapper');
+// Ajustes guardados; el idioma de interfaz sigue al del teléfono la primera vez
+const sys=(navigator.language||'es').slice(0,2);
+$('ui').value=store.get('ui')||(T[sys]?sys:'es');
+['var','eng'].forEach(k=>{const v=store.get(k);if(v)$(k).value=v});
+$('aud').checked=store.get('aud')==='1';
 
-// ============ UTILS ============
-function showToast(msg, type = 'info') {
-  toastMessage.textContent = msg;
-  toastIcon.className = type === 'error'
-    ? 'fa-solid fa-circle-exclamation text-rose-400'
-    : type === 'success'
-    ? 'fa-solid fa-circle-check text-emerald-400'
-    : 'fa-solid fa-bolt text-amber-400';
-  toast.classList.remove('translate-y-20', 'opacity-0');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2600);
+function paint(){
+ document.documentElement.lang=$('ui').value;
+ document.querySelectorAll('[data-t]').forEach(e=>e.textContent=t(e.dataset.t));
+ $('mic').textContent=on?t('stop'):t('start');
+ $('mic').classList.toggle('on',on);
+ if(!on)$('live').textContent='';
+}
+['ui','var','eng'].forEach(k=>$(k).onchange=()=>{store.set(k,$(k).value);paint()});
+$('aud').onchange=()=>{store.set('aud',$('aud').checked?'1':'0');if(!$('aud').checked)speechSynthesis.cancel()};
+
+function add(es){
+ const d=document.createElement('div');d.className='it';
+ d.innerHTML='<div class="zh"></div><div class="es"></div>';
+ d.children[0].textContent='…';d.children[1].textContent=es;
+ $('log').appendChild(d);$('log').scrollTop=$('log').scrollHeight;return d;
 }
 
-function setStatus(text, color = 'emerald') {
-  statusText.textContent = text;
-  statusDot.className = `w-2 h-2 rounded-full bg-${color}-500`;
-  if (color === 'emerald') statusDot.classList.add('animate-ping');
-  else statusDot.classList.remove('animate-ping');
+function speak(x){
+ if(!$('aud').checked||!('speechSynthesis' in window))return;
+ if(pending>2){speechSynthesis.cancel();pending=0} // si va atrasado, salta frases viejas
+ const u=new SpeechSynthesisUtterance(x);
+ u.lang=$('var').value==='zh-Hant'?'zh-TW':'zh-CN';u.rate=1.15;
+ u.onend=u.onerror=()=>{pending=Math.max(0,pending-1)};
+ pending++;speechSynthesis.speak(u);
 }
 
-function vibrate(ms = 30) { if (navigator.vibrate) navigator.vibrate(ms); }
-
-// ============ WAKE LOCK ============
-async function requestWakeLock() {
-  try { if ('wakeLock' in navigator) state.wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+async function translate(es){
+ if(!es)return;
+ const el=add(es);
+ try{
+  const r=await fetch('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({text:es,target:$('var').value,engine:$('eng').value})});
+  const d=await r.json();if(!r.ok||!d.text)throw 0;
+  el.children[0].textContent=d.text;speak(d.text);
+ }catch{el.children[0].textContent='⚠ '+t('err')}
+ $('log').scrollTop=$('log').scrollHeight;
 }
-document.addEventListener('visibilitychange', async () => {
-  if (state.wakeLock !== null && document.visibilityState === 'visible') await requestWakeLock();
-});
 
-// ============ API KEY MODAL ============
-openApiBtn.addEventListener('click', () => {
-  apiKeyInput.value = getApiKey();
-  apiModal.classList.remove('hidden');
-  apiKeyInput.focus();
-});
-closeApiModal.addEventListener('click', () => apiModal.classList.add('hidden'));
-saveApiKeyBtn.addEventListener('click', () => {
-  const key = apiKeyInput.value.trim();
-  if (!key) { showToast('Introduce una API key válida', 'error'); return; }
-  setApiKey(key);
-  apiModal.classList.add('hidden');
-  showToast('API key guardada', 'success');
-});
-apiModal.addEventListener('click', (e) => { if (e.target === apiModal) apiModal.classList.add('hidden'); });
-
-// ============ LANG NAMES ============
-const langNames = {
-  'es-ES': 'español de España', 'es-MX': 'español latinoamericano', 'en-US': 'inglés',
-  'fr-FR': 'francés', 'de-DE': 'alemán', 'it-IT': 'italiano',
-  'pt-BR': 'portugués brasileño', 'zh-CN': 'chino mandarín', 'ja-JP': 'japonés'
-};
-
-// ============ GEMINI API ============
-async function translateWithGemini(text) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    showToast('Configura tu API key primero (botón 🔑)', 'error');
-    openApiBtn.click();
-    return null;
+function setup(){
+ rec=new SR();rec.lang='es-MX';rec.continuous=true;rec.interimResults=true;
+ rec.onresult=e=>{
+  let tmp='';
+  for(let i=e.resultIndex;i<e.results.length;i++){
+   const r=e.results[i];
+   if(r.isFinal)translate(r[0].transcript.trim());else tmp+=r[0].transcript;
   }
-
-  const targetName = langNames[targetLang.value] || targetLang.value;
-  const sourceName = langNames[sourceLang.value] || sourceLang.value;
-  const classroomMode = fastModeToggle.checked;
-
-  const systemPrompt = classroomMode
-    ? `Eres traductor profesional en tiempo real dentro de un salón de clases ruidoso.
-Reglas:
-1. Traduce del ${sourceName} al ${targetName}.
-2. IGNORA ruidos, risas, murmullos, toses, palabras incoherentes.
-3. Si el texto NO es una frase coherente en ${sourceName}, responde EXACTAMENTE: [ruido]
-4. Si la frase está incompleta pero comprensible, tradúcela igual.
-5. Devuelve SOLO la traducción, sin comillas, sin prefijos, sin explicaciones.
-6. Mantén el tono natural del hablante.`
-    : `Traduce del ${sourceName} al ${targetName}. Devuelve SOLO la traducción, sin comillas ni explicaciones.`;
-
-  const body = {
-    contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nTexto: "${text}"` }] }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-    ]
-  };
-
-  try {
-    const res = await fetch(GEMINI_URL(apiKey), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const translation = raw.trim().replace(/^["']|["']$/g, '');
-    if (!translation) return { translation: '', isNoise: true };
-    return {
-      translation,
-      isNoise: translation.includes('[ruido]') || translation.toLowerCase() === 'ruido'
-    };
-  } catch (err) {
-    console.error('Gemini error:', err);
-    showToast('Error: ' + err.message, 'error');
-    return null;
-  }
+  $('live').textContent=tmp;
+ };
+ rec.onerror=e=>{
+  if(e.error==='not-allowed'||e.error==='service-not-allowed'){on=false;$('msg').textContent=t('deny');paint()}
+ };
+ // Chrome corta la escucha tras silencios: se reinicia sola mientras esté activa
+ rec.onend=()=>{if(on)setTimeout(()=>{try{rec.start()}catch{}},250)};
 }
 
-// ============ PROCESO TEXTO (VOZ) ============
-async function processText(text) {
-  if (state.isTranslating) { state.pendingText = text; return; }
-  state.isTranslating = true;
-  translatingSpinner.classList.remove('hidden');
-  translationState.textContent = 'Traduciendo...';
-
-  const data = await translateWithGemini(text);
-  state.isTranslating = false;
-  translatingSpinner.classList.add('hidden');
-
-  if (!data) translationState.textContent = 'Error';
-  else if (data.isNoise) translationState.textContent = 'Ruido filtrado';
-  else displayTranslation(data.translation);
-
-  if (state.pendingText) {
-    const p = state.pendingText; state.pendingText = null;
-    processText(p);
-  }
+async function toggle(){
+ if(!SR){$('msg').textContent=t('unsup');return}
+ $('msg').textContent='';
+ if(!on){
+  if(!rec)setup();
+  on=true;try{rec.start()}catch{}
+  try{lock=await navigator.wakeLock?.request('screen')}catch{} // pantalla encendida
+  $('live').textContent=t('hear');
+ }else{
+  on=false;rec.stop();speechSynthesis.cancel();lock?.release?.();lock=null;
+ }
+ paint();
 }
-
-function displayTranslation(text) {
-  translationState.textContent = 'En vivo';
-  speakResultBtn.disabled = false;
-  if (state.fullHistory.length === 0) translationHistory.innerHTML = '';
-
-  if (state.fullHistory[state.fullHistory.length - 1] !== text) {
-    state.fullHistory.push(text);
-    const p = document.createElement('p');
-    p.className = 'bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/40 shadow-sm fade-in';
-    p.textContent = text;
-    translationHistory.appendChild(p);
-    const isNearBottom = translationHistory.scrollHeight - translationHistory.clientHeight <= translationHistory.scrollTop + 120;
-    if (isNearBottom) translationHistory.scrollTop = translationHistory.scrollHeight;
-    historyCount.textContent = `${state.fullHistory.length} fragmentos`;
-  }
-  if (state.outputMode === 'both' || state.outputMode === 'audio') {
-    speakText(text, targetLang.value);
-  }
-}
-
-// ============ TTS ============
-function speakText(text, lang) {
-  if (!text || !('speechSynthesis' in window) || text === '[ruido]') return;
-  window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = lang;
-  utter.rate = 1.15;
-  utter.pitch = 1.0;
-  const voices = window.speechSynthesis.getVoices();
-  const match = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
-  if (match) utter.voice = match;
-  window.speechSynthesis.speak(utter);
-}
-if ('speechSynthesis' in window) {
-  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
-}
-
-// ============ RECOGNITION ============
-function initRecognition() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { showToast('Tu navegador no soporta reconocimiento. Usa Chrome/Edge.', 'error'); return null; }
-  const rec = new SR();
-  rec.continuous = true;
-  rec.interimResults = true;
-  rec.lang = sourceLang.value;
-  rec.maxAlternatives = 1;
-
-  let finalBuffer = '';
-  rec.onresult = (event) => {
-    let interim = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const t = event.results[i][0].transcript;
-      if (event.results[i].isFinal) finalBuffer += t + ' ';
-      else interim += t;
-    }
-    inputText.textContent = (finalBuffer + interim).trim() || 'Escuchando...';
-    speechState.textContent = 'Escuchando...';
-    clearTimeout(state.silenceTimer);
-    state.silenceTimer = setTimeout(() => {
-      const text = (finalBuffer + interim).trim();
-      if (text.length > 2 && text !== state.lastProcessedText) {
-        state.lastProcessedText = text;
-        processText(text);
-        finalBuffer = '';
-      }
-    }, 380);
-  };
-  rec.onerror = (e) => {
-    if (e.error === 'no-speech' || e.error === 'aborted') return;
-    if (e.error === 'not-allowed') { showToast('Permiso de micrófono denegado', 'error'); stopListening(); return; }
-    if (state.shouldRestart) setTimeout(() => { try { rec.start(); } catch (err) {} }, 400);
-  };
-  rec.onend = () => {
-    if (state.shouldRestart && state.isListening) { try { rec.start(); } catch (e) {} }
-  };
-  return rec;
-}
-
-async function startListening() {
-  if (!getApiKey()) { showToast('Configura tu API key primero 🔑', 'error'); openApiBtn.click(); return; }
-  if (!state.recognition) { state.recognition = initRecognition(); if (!state.recognition) return; }
-  try {
-    state.recognition.lang = sourceLang.value;
-    state.shouldRestart = true;
-    state.isListening = true;
-    state.recognition.start();
-    micBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-500');
-    micBtn.classList.add('bg-rose-600', 'hover:bg-rose-500');
-    micIcon.className = 'fa-solid fa-stop text-2xl md:text-3xl mb-0.5';
-    micLabel.textContent = 'Parar';
-    micRing.classList.remove('hidden');
-    speechState.textContent = 'Escuchando...';
-    setStatus('Escuchando', 'rose');
-    vibrate(40);
-    requestWakeLock();
-  } catch (e) { showToast('Error al iniciar: ' + e.message, 'error'); }
-}
-
-function stopListening() {
-  state.shouldRestart = false;
-  state.isListening = false;
-  if (state.recognition) { try { state.recognition.stop(); } catch (e) {} }
-  micBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500');
-  micBtn.classList.remove('bg-rose-600', 'hover:bg-rose-500');
-  micIcon.className = 'fa-solid fa-microphone text-2xl md:text-3xl mb-0.5';
-    micLabel.textContent = 'Hablar';
-    micRing.classList.add('hidden');
-    speechState.textContent = 'Inactivo';
-    setStatus('Listo', 'emerald');
-    window.speechSynthesis?.cancel();
-    vibrate(40);
-}
-
-// ============ TAB SWITCHING ============
-function switchTab(tab) {
-    state.currentTab = tab;
-    if (tab === 'voice') {
-        tabVoice.classList.add('tab-active');
-        tabText.classList.remove('tab-active');
-        voicePanel.classList.remove('hidden');
-        textPanel.classList.add('hidden');
-        micWrapper.classList.remove('hidden');
-    } else {
-        tabText.classList.add('tab-active');
-        tabVoice.classList.remove('tab-active');
-        textPanel.classList.remove('hidden');
-        voicePanel.classList.add('hidden');
-        micWrapper.classList.add('hidden');
-        // Detener escucha si estaba activa al cambiar a texto
-        if (state.isListening) stopListening();
-    }
-}
-
-tabVoice.addEventListener('click', () => switchTab('voice'));
-tabText.addEventListener('click', () => switchTab('text'));
-
-// ============ EVENTOS BOTÓN MIC ============
-micBtn.addEventListener('click', () => {
-    if (state.isListening) stopListening();
-    else startListening();
+$('mic').onclick=toggle;
+document.addEventListener('visibilitychange',async()=>{
+ if(on&&document.visibilityState==='visible'){try{lock=await navigator.wakeLock?.request('screen')}catch{}}
 });
-
-// ============ SWAP IDIOMAS ============
-swapLangsBtn.addEventListener('click', () => {
-    const s = sourceLang.value;
-    sourceLang.value = targetLang.value;
-    targetLang.value = s;
-    if (state.recognition && state.isListening) {
-        state.recognition.lang = sourceLang.value;
-        state.lastProcessedText = '';
-    }
-    showToast('Idiomas intercambiados', 'success');
-});
-
-sourceLang.addEventListener('change', () => {
-    if (state.recognition) state.recognition.lang = sourceLang.value;
-});
-
-// ============ MODOS DE SALIDA ============
-document.querySelectorAll('.output-mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.output-mode-btn').forEach(b => {
-            b.classList.remove('bg-indigo-600', 'text-white');
-            b.classList.add('text-slate-400');
-        });
-        btn.classList.add('bg-indigo-600', 'text-white');
-        btn.classList.remove('text-slate-400');
-        state.outputMode = btn.dataset.mode;
-        showToast(`Modo: ${btn.dataset.mode === 'both' ? 'Ambos' : btn.dataset.mode === 'text' ? 'Solo texto' : 'Solo audio'}`, 'info');
-    });
-});
-
-// ============ EXPANDIR ============
-expandBtn.addEventListener('click', () => {
-    state.isExpanded = !state.isExpanded;
-    translationCard.classList.toggle('expanded', state.isExpanded);
-    expandIcon.className = state.isExpanded ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
-});
-
-// ============ SPEAK / COPY / DOWNLOAD ============
-speakResultBtn.addEventListener('click', () => {
-    if (state.fullHistory.length > 0) {
-        speakText(state.fullHistory[state.fullHistory.length - 1], targetLang.value);
-    }
-});
-
-copyBtn.addEventListener('click', async () => {
-    if (!state.fullHistory.length) return;
-    const text = state.fullHistory.join('\n\n');
-    try {
-        await navigator.clipboard.writeText(text);
-        showToast('Historial copiado', 'success');
-    } catch {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        showToast('Historial copiado', 'success');
-    }
-});
-
-downloadBtn.addEventListener('click', () => {
-    if (!state.fullHistory.length) { showToast('No hay traducciones para descargar', 'error'); return; }
-    const content = `Traducción — ${new Date().toLocaleString()}\n` +
-        `Idioma origen: ${sourceLang.value} → Destino: ${targetLang.value}\n\n` +
-        state.fullHistory.join('\n\n');
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `traduccion_${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Archivo descargado', 'success');
-});
-
-clearBtn.addEventListener('click', () => {
-    inputText.textContent = 'Esperando audio...';
-    translationHistory.innerHTML = '<p class="text-slate-500 italic text-sm">La traducción se acumulará aquí para que puedas releer...</p>';
-    state.fullHistory = [];
-    state.lastProcessedText = '';
-    historyCount.textContent = '0 fragmentos';
-    speakResultBtn.disabled = true;
-    speechState.textContent = 'Inactivo';
-    translationState.textContent = 'En espera';
-    window.speechSynthesis?.cancel();
-    showToast('Historial limpiado', 'success');
-});
-
-// ============ MODO TEXTO (ESCRITO) ============
-textInputArea.addEventListener('input', () => {
-    charCount.textContent = `${textInputArea.value.length} caracteres`;
-});
-
-translateTextBtn.addEventListener('click', async () => {
-    const text = textInputArea.value.trim();
-    if (!text) { showToast('Escribe algo primero', 'error'); return; }
-    if (text.length > 5000) { showToast('Máximo 5000 caracteres', 'error'); return; }
-
-    translateTextBtn.disabled = true;
-    translateTextBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin mr-1"></i> Traduciendo...';
-    textResult.textContent = 'Traduciendo...';
-    textResult.classList.add('italic', 'text-slate-400');
-
-    const data = await translateWithGemini(text);
-
-    translateTextBtn.disabled = false;
-    translateTextBtn.innerHTML = '<i class="fa-solid fa-language mr-1"></i> Traducir';
-
-    if (!data || data.isNoise) {
-        textResult.textContent = 'No se pudo traducir (texto no válido o ruido).';
-        textResult.classList.add('italic', 'text-slate-400');
-        return;
-    }
-
-    state.lastTextResult = data.translation;
-    textResult.textContent = data.translation;
-    textResult.classList.remove('italic', 'text-slate-400');
-    textResult.classList.add('fade-in');
-    speakTextResultBtn.disabled = false;
-    copyTextResultBtn.disabled = false;
-
-    if (state.outputMode === 'both' || state.outputMode === 'audio') {
-        speakText(data.translation, targetLang.value);
-    }
-});
-
-clearTextBtn.addEventListener('click', () => {
-    textInputArea.value = '';
-    charCount.textContent = '0 caracteres';
-    textResult.textContent = 'La traducción aparecerá aquí...';
-    textResult.classList.add('italic', 'text-slate-400');
-    speakTextResultBtn.disabled = true;
-    copyTextResultBtn.disabled = true;
-    state.lastTextResult = '';
-    window.speechSynthesis?.cancel();
-});
-
-// Ctrl/Cmd + Enter para traducir rápido
-textInputArea.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        translateTextBtn.click();
-    }
-});
-
-speakTextResultBtn.addEventListener('click', () => {
-    if (state.lastTextResult) speakText(state.lastTextResult, targetLang.value);
-});
-
-copyTextResultBtn.addEventListener('click', async () => {
-    if (!state.lastTextResult) return;
-    try {
-        await navigator.clipboard.writeText(state.lastTextResult);
-        showToast('Traducción copiada', 'success');
-    } catch {
-        const ta = document.createElement('textarea');
-        ta.value = state.lastTextResult;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        showToast('Traducción copiada', 'success');
-    }
-});
-
-// ============ ATAJOS DE TECLADO ============
-document.addEventListener('keydown', (e) => {
-    // Ignorar si estamos escribiendo
-    const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName);
-    if (isTyping) return;
-
-    if (e.key === 'Escape' && state.isExpanded) {
-        expandBtn.click();
-    }
-    if (e.code === 'Space') {
-        e.preventDefault();
-        if (state.currentTab === 'voice') {
-            if (state.isListening) stopListening();
-            else startListening();
-        }
-    }
-});
-
-// ============ INICIALIZACIÓN ============
-window.addEventListener('load', () => {
-    // Verificar API key
-    if (!getApiKey()) {
-        setTimeout(() => {
-            showToast('Configura tu API key para empezar 🔑', 'info');
-            openApiBtn.click();
-        }, 800);
-    }
-
-    // Verificar soporte de reconocimiento de voz
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-        showToast('Usa Chrome o Edge para reconocimiento de voz', 'error');
-        // Deshabilitar botón micrófono
-        micBtn.disabled = true;
-        micBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        micLabel.textContent = 'No soportado';
-    }
-
-    // Verificar soporte TTS
-    if (!('speechSynthesis' in window)) {
-        showToast('Tu navegador no soporta síntesis de voz', 'error');
-    }
-
-    setStatus('Listo', 'emerald');
-});
-
-// ============ LIMPIEZA AL CERRAR ============
-window.addEventListener('beforeunload', () => {
-    if (state.recognition) { try { state.recognition.stop(); } catch (e) {} }
-    window.speechSynthesis?.cancel();
-});
+paint();
+if(!SR)$('msg').textContent=t('unsup');
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-  
